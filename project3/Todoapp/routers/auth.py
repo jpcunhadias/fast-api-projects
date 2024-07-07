@@ -42,13 +42,13 @@ def authenticate_user(db: Session, username: str, password: str):
     return user
 
 
-def create_access_token(username: str, user_id: int, expires_delta: timedelta):
-    to_encode = {"sub": username, "user_id": user_id, "exp": datetime.utcnow() + expires_delta}
+def create_access_token(username: str, user_id: int, role: str, expires_delta: timedelta):
+    to_encode = {"sub": username, "user_id": user_id, "role": role, "exp": datetime.utcnow() + expires_delta}
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 
-async def get_current_user(token: str = Depends(oath2_bearer),):
+async def get_current_user(token: str = Depends(oath2_bearer), ):
     credentials_exception = HTTPException(
         status_code=401,
         detail="Could not validate credentials",
@@ -58,9 +58,10 @@ async def get_current_user(token: str = Depends(oath2_bearer),):
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         user_id: int = payload.get("user_id")
+        user_role: str = payload.get("role")
         if username is None:
             raise credentials_exception
-        return {"username": username, "user_id": user_id}
+        return {"username": username, "user_id": user_id, "role": user_role}
     except JWTError:
         raise credentials_exception
 
@@ -88,7 +89,6 @@ async def create_user(user: CreateUserRequest, db: Session = db_dependency):
     db.add(user_model)
     db.commit()
     db.refresh(user_model)
-    return user_model
 
 
 @router.post("/token", response_model=Token)
@@ -97,5 +97,6 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     if not user:
         raise HTTPException(status_code=400, detail="Incorrect username or password")
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(username=user.username, user_id=user.id, expires_delta=access_token_expires)
+    access_token = create_access_token(username=user.username, user_id=user.id, role=user.role,
+                                       expires_delta=access_token_expires)
     return {"access_token": access_token, "token_type": "bearer"}
