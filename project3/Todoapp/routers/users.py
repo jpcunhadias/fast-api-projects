@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from starlette import status
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 from database import SessionLocal
 from .auth import get_current_user
 from models import Users
@@ -19,7 +20,6 @@ def get_db():
     finally:
         db.close()
 
-
 db_dependency = Depends(get_db)
 user_dependency = Depends(get_current_user)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -31,7 +31,7 @@ class UserVerification(BaseModel):
 
 
 @router.get("/me", status_code=status.HTTP_200_OK)
-async def get_user_me(user: dict = user_dependency, db=Depends(db_dependency)):
+async def get_user(user: dict = user_dependency, db: Session = db_dependency):
     user = db.query(Users).filter(Users.id == user.get("user_id")).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -39,7 +39,7 @@ async def get_user_me(user: dict = user_dependency, db=Depends(db_dependency)):
 
 
 @router.post("/verify", status_code=status.HTTP_200_OK)
-async def verify_user(user_verification: UserVerification, db=Depends(db_dependency)):
+async def verify_user(user_verification: UserVerification, db: Session = db_dependency):
     user = db.query(Users).filter(Users.username == user_verification.username).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -49,12 +49,12 @@ async def verify_user(user_verification: UserVerification, db=Depends(db_depende
 
 
 @router.put("/update", status_code=status.HTTP_200_OK)
-async def change_password(user_verification: UserVerification, user: dict = user_dependency, db=Depends(db_dependency), ):
-    user = db.query(Users).filter(Users.id == user.get("user_id")).first()
-    if not user:
+async def change_password(user_verification: UserVerification, user: dict = user_dependency, db: Session = db_dependency):
+    user_db = db.query(Users).filter(Users.id == user.get("user_id")).first()
+    if not user_db:
         raise HTTPException(status_code=404, detail="User not found")
-    if not pwd_context.verify(user_verification.password, user.hashed_password):
+    if not pwd_context.verify(user_verification.password, user_db.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid password")
-    user.hashed_password = pwd_context.hash(user_verification.password)
+    user_db.hashed_password = pwd_context.hash(user_verification.password)
     db.commit()
     return {"message": "Password updated successfully"}

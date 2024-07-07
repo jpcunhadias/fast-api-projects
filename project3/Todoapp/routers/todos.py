@@ -24,7 +24,6 @@ def get_db():
 db_dependency = Depends(get_db)
 user_dependency = Depends(get_current_user)
 
-
 def get_todo_for_user(db: Session, user: dict, todo_id: int):
     if user is None:
         raise HTTPException(status_code=401, detail="Authentication failed")
